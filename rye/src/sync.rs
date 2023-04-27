@@ -1,4 +1,7 @@
+#[cfg(not(target_os = "windows"))]
 use std::os::unix::fs::symlink;
+#[cfg(target_os = "windows")]
+use std::os::windows::fs::symlink_file;
 use std::path::Path;
 use std::process::Command;
 use std::{env, fs};
@@ -137,9 +140,95 @@ pub fn sync(cmd: SyncOptions) -> Result<(), Error> {
     // hack to make this work for now.  We basically sym-link pip itself
     // into a folder all by itself and place a second file in there which we
     // can pass to pip-sync to install the local package.
+    #[cfg(not(target_os = "windows"))]
     if recreate || cmd.mode != SyncMode::PythonOnly {
         let dir = TempDir::new()?;
         symlink(get_pip_module(&self_venv), dir.path().join("pip"))
+            .context("failed linking pip module into for pip-sync")?;
+
+        if let Some(workspace) = pyproject.workspace() {
+            // make sure we have an up-to-date lockfile
+            update_workspace_lockfile(
+                workspace,
+                LockMode::Production,
+                &lockfile,
+                cmd.output,
+                &cmd.lock_options,
+            )
+            .context("could not write production lockfile for workspace")?;
+            update_workspace_lockfile(
+                workspace,
+                LockMode::Dev,
+                &dev_lockfile,
+                cmd.output,
+                &cmd.lock_options,
+            )
+            .context("could not write dev lockfile for workspace")?;
+        } else {
+            // make sure we have an up-to-date lockfile
+            update_single_project_lockfile(
+                &pyproject,
+                LockMode::Production,
+                &lockfile,
+                cmd.output,
+                &cmd.lock_options,
+            )
+            .context("could not write production lockfile for project")?;
+            update_single_project_lockfile(
+                &pyproject,
+                LockMode::Dev,
+                &dev_lockfile,
+                cmd.output,
+                &cmd.lock_options,
+            )
+            .context("could not write dev lockfile for project")?;
+        }
+
+        // run pip install with the lockfile.
+        if cmd.mode != SyncMode::LockOnly {
+            if output != CommandOutput::Quiet {
+                eprintln!("Installing dependencies");
+            }
+            let mut pip_sync_cmd = Command::new(self_venv.join("bin/pip-sync"));
+            pip_sync_cmd
+                .env("PYTHONPATH", dir.path())
+                .current_dir(pyproject.workspace_path())
+                .arg("--python-executable")
+                .arg(venv.join("bin/python"))
+                // note that the double quotes are necessary to properly handle
+                // spaces in paths
+                .arg(format!(
+                    "--pip-args=\"--python={}\"",
+                    venv.join("bin/python").display()
+                ));
+
+            if cmd.dev && dev_lockfile.is_file() {
+                pip_sync_cmd.arg(&dev_lockfile);
+            } else {
+                pip_sync_cmd.arg(&lockfile);
+            }
+
+            if output == CommandOutput::Verbose {
+                pip_sync_cmd.arg("--verbose");
+                if env::var("PIP_VERBOSE").is_err() {
+                    pip_sync_cmd.env("PIP_VERBOSE", "2");
+                }
+            } else if output != CommandOutput::Quiet {
+                pip_sync_cmd.env("PYTHONWARNINGS", "ignore");
+            } else {
+                pip_sync_cmd.arg("-q");
+            }
+            let status = pip_sync_cmd.status().context("unable to run pip-sync")?;
+            if !status.success() {
+                bail!("Installation of dependencies failed");
+            }
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    if recreate || cmd.mode != SyncMode::PythonOnly {
+        let dir = TempDir::new()?;
+        symlink_file(get_pip_module(&self_venv), dir.path().join("pip.exe"))
             .context("failed linking pip module into for pip-sync")?;
 
         if let Some(workspace) = pyproject.workspace() {

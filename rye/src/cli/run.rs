@@ -1,6 +1,9 @@
 use std::env;
 use std::ffi::{CString, OsString};
+#[cfg(not(target_os = "windows"))]
 use std::os::unix::prelude::OsStrExt;
+#[cfg(target_os = "windows")]
+use std::os::windows::prelude::OsStrExt;
 
 use anyhow::{bail, Context, Error};
 use clap::Parser;
@@ -87,6 +90,7 @@ pub fn execute(cmd: Args) -> Result<(), Error> {
     }
     env::remove_var("PYTHONHOME");
 
+    #[cfg(not(target_os = "windows"))]
     if let Err(err) = nix::unistd::execv(&path, &args) {
         if err == nix::Error::ENOENT {
             bail!("No script with name '{}' found in virtualenv", short_name);

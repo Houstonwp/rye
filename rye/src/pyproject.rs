@@ -4,7 +4,10 @@ use std::collections::HashSet;
 use std::env;
 use std::ffi::OsStr;
 use std::fs;
+#[cfg(not(target_os = "windows"))]
 use std::os::unix::prelude::MetadataExt;
+#[cfg(target_os = "windows")]
+use std::os::windows::prelude::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;

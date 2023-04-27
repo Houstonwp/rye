@@ -156,11 +156,16 @@ fn do_update(output: CommandOutput, venv_dir: &Path, app_dir: &Path) -> Result<(
         fs::hard_link(&this, shims.join("python")).context("tried to hard-link python shim")?;
         fs::hard_link(&this, shims.join("python3")).context("tried to hard-link python3 shim")?;
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(target_os = "macos")]
     {
         use std::os::unix::fs::symlink;
         symlink(&this, shims.join("python")).context("tried to symlink python shim")?;
         symlink(&this, shims.join("python3")).context("tried to symlink python3 shim")?;
+    }
+    #[cfg(target_os = "windows")]
+    {
+        fs::hard_link(&this, shims.join("python.exe")).context("tried to symlink python shim")?;
+        fs::hard_link(&this, shims.join("python3.exe")).context("tried to symlink python3 shim")?;
     }
 
     Ok(())

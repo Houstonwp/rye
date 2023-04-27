@@ -2,6 +2,7 @@ use std::cmp::Reverse;
 use std::collections::HashMap;
 use std::env::consts::{ARCH, OS};
 use std::fs;
+#[cfg(not(target_os = "windows"))]
 use std::os::unix::fs::symlink;
 use std::path::PathBuf;
 use std::process::Command;
@@ -117,7 +118,14 @@ fn register(cmd: RegisterCommand) -> Result<(), Error> {
         fs::create_dir_all(parent).ok();
     }
 
+    #[cfg(not(target_os = "windows"))]
     symlink(&cmd.path, target).context("could not symlink interpreter")?;
+
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::fs::symlink_dir;
+        symlink_dir(&cmd.path, target).context("could not symlink interpreter")?;
+    }
     println!("Registered {} as {}", cmd.path.display(), target_version);
 
     Ok(())

@@ -1,6 +1,9 @@
 use std::env;
 use std::ffi::{CString, OsStr, OsString};
+#[cfg(not(target_os = "windows"))]
 use std::os::unix::prelude::OsStrExt;
+#[cfg(target_os = "windows")]
+use std::os::windows::prelude::OsStrExt;
 
 use anyhow::{bail, Context, Error};
 use same_file::is_same_file;

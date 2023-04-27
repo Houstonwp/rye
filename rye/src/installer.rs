@@ -1,5 +1,8 @@
 use std::fs;
+#[cfg(not(target_os = "windows"))]
 use std::os::unix::fs::symlink;
+#[cfg(target_os = "windows")]
+use std::os::windows::fs::symlink_file;
 use std::path::Path;
 use std::process::{Command, Stdio};
 
@@ -81,13 +84,30 @@ pub fn install(
         .map(Path::new)
         .collect::<Vec<_>>();
 
-    for file in files {
-        if let Ok(rest) = file.strip_prefix(&target_venv_bin_path) {
-            let shim_target = shim_dir.join(rest);
-            symlink(file, shim_target)
-                .with_context(|| format!("unable to symlink tool to {}", file.display()))?;
-            if output != CommandOutput::Quiet {
-                eprintln!("installed script {}", style(rest.display()).cyan());
+    #[cfg(not(target_os = "windows"))]
+    {
+        for file in files {
+            if let Ok(rest) = file.strip_prefix(&target_venv_bin_path) {
+                let shim_target = shim_dir.join(rest);
+                symlink(file, shim_target)
+                    .with_context(|| format!("unable to symlink tool to {}", file.display()))?;
+                if output != CommandOutput::Quiet {
+                    eprintln!("installed script {}", style(rest.display()).cyan());
+                }
+            }
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        for file in files {
+            if let Ok(rest) = file.strip_prefix(&target_venv_bin_path) {
+                let shim_target = shim_dir.join(rest);
+                symlink_file(file, shim_target)
+                    .with_context(|| format!("unable to symlink tool to {}", file.display()))?;
+                if output != CommandOutput::Quiet {
+                    eprintln!("installed script {}", style(rest.display()).cyan());
+                }
             }
         }
     }
